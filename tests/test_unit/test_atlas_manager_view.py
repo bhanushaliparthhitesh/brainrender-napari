@@ -263,3 +263,32 @@ def test_apply_in_thread(qtbot, mocker):
 
     # Restore the original _apply_in_thread
     atlas_manager_view._apply_in_thread = original_apply_in_thread
+
+
+def test_sorting_enabled_manager_view(atlas_manager_view):
+    """Check sorting is enabled on the atlas manager view."""
+    assert atlas_manager_view.isSortingEnabled()
+
+
+def test_sort_atlas_manager_view(atlas_manager_view):
+    """Check that sorting by Atlas column changes the row order."""
+    atlas_col = atlas_manager_view.source_model.column_headers.index("Atlas")
+
+    atlas_manager_view.sortByColumn(atlas_col, Qt.AscendingOrder)
+    names_asc = [
+        atlas_manager_view.model().data(
+            atlas_manager_view.model().index(row, atlas_col)
+        )
+        for row in range(atlas_manager_view.model().rowCount())
+    ]
+
+    atlas_manager_view.sortByColumn(atlas_col, Qt.DescendingOrder)
+    names_desc = [
+        atlas_manager_view.model().data(
+            atlas_manager_view.model().index(row, atlas_col)
+        )
+        for row in range(atlas_manager_view.model().rowCount())
+    ]
+
+    assert names_asc == sorted(names_asc)
+    assert names_asc == list(reversed(names_desc))

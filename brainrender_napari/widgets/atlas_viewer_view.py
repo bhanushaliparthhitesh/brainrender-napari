@@ -12,7 +12,7 @@ from typing import Tuple
 from brainglobe_atlasapi.list_atlases import (
     get_downloaded_atlases,
 )
-from qtpy.QtCore import QModelIndex, Qt, Signal
+from qtpy.QtCore import QModelIndex, QSortFilterProxyModel, Qt, Signal
 from qtpy.QtWidgets import QMenu, QTableView, QWidget
 
 from brainrender_napari.data_models.atlas_table_model import AtlasTableModel
@@ -20,6 +20,18 @@ from brainrender_napari.utils.formatting import format_atlas_name
 from brainrender_napari.utils.load_user_data import (
     read_atlas_metadata_from_file,
 )
+
+
+class _DownloadedAtlasProxyModel(QSortFilterProxyModel):
+    """Proxy model that filters to show only locally downloaded atlases."""
+
+    def filterAcceptsRow(
+        self, source_row: int, source_parent: QModelIndex
+    ) -> bool:
+        atlas_name = self.sourceModel().data(
+            self.sourceModel().index(source_row, 0)
+        )
+        return atlas_name in get_downloaded_atlases()
 
 
 class AtlasViewerView(QTableView):
@@ -36,7 +48,10 @@ class AtlasViewerView(QTableView):
         """
         super().__init__(parent)
 
-        self.setModel(AtlasTableModel(AtlasViewerView))
+        self.source_model = AtlasTableModel(AtlasViewerView)
+        self.proxy_model = _DownloadedAtlasProxyModel()
+        self.proxy_model.setSourceModel(self.source_model)
+        self.setModel(self.proxy_model)
 
         self.setEnabled(True)
         self.verticalHeader().hide()
@@ -49,21 +64,18 @@ class AtlasViewerView(QTableView):
             self._on_context_menu_requested
         )
 
+        self.setSortingEnabled(True)
         self.doubleClicked.connect(self._on_row_double_clicked)
         self.selectionModel().currentChanged.connect(self._on_current_changed)
 
         for column_header in ["Raw name", "Local version", "Latest version"]:
-            index_to_hide = self.model().column_headers.index(column_header)
+            index_to_hide = self.source_model.column_headers.index(
+                column_header
+            )
             self.hideColumn(index_to_hide)
 
         if len(get_downloaded_atlases()) == 0:
             self.no_atlas_available.emit()
-
-        # hide atlases not available locally
-        for row_index in range(self.model().rowCount()):
-            index = self.model().index(row_index, 0)
-            if self.model().data(index) not in get_downloaded_atlases():
-                self.hideRow(row_index)
 
     def selected_atlas_name(self) -> str:
         """A single place to get a valid selected atlas name."""
@@ -72,7 +84,7 @@ class AtlasViewerView(QTableView):
         selected_atlas_name_index: QModelIndex = (
             selected_index.siblingAtColumn(0)
         )
-        selected_atlas_name = self.model().data(selected_atlas_name_index)
+        selected_atlas_name = self.proxy_model.data(selected_atlas_name_index)
         assert selected_atlas_name in get_downloaded_atlases()
         return selected_atlas_name
 
