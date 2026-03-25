@@ -58,6 +58,7 @@ class AtlasManagerView(QTableView):
         self.setSelectionBehavior(QTableView.SelectionBehavior.SelectRows)
         self.setSelectionMode(QTableView.SelectionMode.SingleSelection)
 
+        self.setSortingEnabled(True)
         self.doubleClicked.connect(self._on_row_double_clicked)
         self.hidden_columns = ["Raw name"]  # hide raw name
         for col in self.hidden_columns:

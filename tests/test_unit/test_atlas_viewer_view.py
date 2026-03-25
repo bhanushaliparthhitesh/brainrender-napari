@@ -1,5 +1,3 @@
-import traceback
-
 import pytest
 from qtpy.QtCore import QModelIndex, Qt
 
@@ -22,7 +20,7 @@ def atlas_viewer_view(qtbot) -> AtlasViewerView:
     "row, expected_atlas_name",
     [
         (0, "example_mouse_100um"),
-        (4, "allen_mouse_100um"),
+        (1, "allen_mouse_100um"),
     ],
 )
 def test_atlas_view_valid_selection(
@@ -42,19 +40,17 @@ def test_atlas_view_invalid_selection(atlas_viewer_view):
         atlas_viewer_view.selected_atlas_name()
 
 
-def test_atlas_view_not_downloaded_selection(qtbot, atlas_viewer_view):
-    """Checks that selected_atlas_name raises an assertion error
-    if current index is valid, but not a downloaded atlas.
+def test_atlas_viewer_view_only_shows_downloaded_atlases(atlas_viewer_view):
+    """Checks that the atlas viewer view only shows locally downloaded atlases.
+    Non-downloaded atlases are filtered out by the proxy model.
     """
-    with qtbot.capture_exceptions() as exceptions:
-        # should raise because human atlas (row 6) is not available
-        # exception raised within qt loop in this case.
-        model_index = atlas_viewer_view.model().index(6, 0)
-        atlas_viewer_view.setCurrentIndex(model_index)
-    assert len(exceptions) == 1
-    _, exception, collected_traceback = exceptions[0]  # ignore type
-    assert isinstance(exception, AssertionError)
-    assert "selected_atlas_name" in traceback.format_tb(collected_traceback)[0]
+    from brainglobe_atlasapi.list_atlases import get_downloaded_atlases
+
+    downloaded = get_downloaded_atlases()
+    for row in range(atlas_viewer_view.model().rowCount()):
+        index = atlas_viewer_view.model().index(row, 0)
+        atlas_name = atlas_viewer_view.model().data(index)
+        assert atlas_name in downloaded
 
 
 def test_hover_atlas_viewer_view(atlas_viewer_view, mocker):
@@ -75,8 +71,8 @@ def test_hover_atlas_viewer_view(atlas_viewer_view, mocker):
     "row,expected_atlas_name",
     [
         (0, "example_mouse_100um"),
-        (4, "allen_mouse_100um"),
-        (14, "osten_mouse_100um"),
+        (1, "allen_mouse_100um"),
+        (2, "osten_mouse_100um"),
     ],
 )
 def test_double_click_on_locally_available_atlas_row(
@@ -134,3 +130,32 @@ def test_get_tooltip_invalid_name():
     with pytest.raises(ValueError) as e:
         _ = AtlasViewerView.get_tooltip_text("wrong_atlas_name")
         assert "invalid atlas name" in e
+
+
+def test_sorting_enabled_viewer_view(atlas_viewer_view):
+    """Check that column-header sorting is enabled on the atlas viewer view."""
+    assert atlas_viewer_view.isSortingEnabled()
+
+
+def test_sort_atlas_viewer_view(atlas_viewer_view):
+    """Check that sorting by Atlas column changes the row order."""
+    atlas_col = atlas_viewer_view.source_model.column_headers.index("Atlas")
+
+    atlas_viewer_view.sortByColumn(atlas_col, Qt.AscendingOrder)
+    names_asc = [
+        atlas_viewer_view.model().data(
+            atlas_viewer_view.model().index(row, atlas_col)
+        )
+        for row in range(atlas_viewer_view.model().rowCount())
+    ]
+
+    atlas_viewer_view.sortByColumn(atlas_col, Qt.DescendingOrder)
+    names_desc = [
+        atlas_viewer_view.model().data(
+            atlas_viewer_view.model().index(row, atlas_col)
+        )
+        for row in range(atlas_viewer_view.model().rowCount())
+    ]
+
+    assert names_asc == sorted(names_asc)
+    assert names_asc == list(reversed(names_desc))
